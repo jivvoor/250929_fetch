@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Seoul Subway Stats</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+      crossorigin="anonymous"
+    />
+    <style>
+      body {
+        background-color: #f8f9fa;
+      }
+      .container {
+        max-width: 700px;
+      }
+      .card {
+        margin-top: 2rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container mt-5">
+      <h1 class="text-center mb-4">Seoul Subway Usage Stats</h1>
+      <div class="card p-4">
+        <form id="subwayForm">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="routeName" class="form-label">Subway Line</label>
+              <select name="routeName" id="routeName" class="form-select">
+                <option value="1호선">Line 1</option>
+                <option value="2호선">Line 2</option>
+                <option value="3호선">Line 3</option>
+                <option value="4호선">Line 4</option>
+                <option value="5호선">Line 5</option>
+                <option value="6호선">Line 6</option>
+                <option value="7호선">Line 7</option>
+                <option value="8호선">Line 8</option>
+                <option value="9호선">Line 9</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label for="stationName" class="form-label">Station Name</label>
+              <input
+                name="stationName"
+                id="stationName"
+                class="form-control"
+                placeholder="e.g., City Hall"
+              />
+            </div>
+            <div class="col-md-12">
+              <label for="date" class="form-label">Date</label>
+              <input
+                name="date"
+                id="date"
+                class="form-control"
+                placeholder="YYYYMMDD (e.g., 20250922)"
+              />
+            </div>
+          </div>
+          <div class="d-grid mt-4">
+            <button type="submit" class="btn btn-primary">
+              Get Stats
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div id="results" class="card p-4" style="display: none">
+        <h2 class="text-center">Results</h2>
+        <div id="results-content"></div>
+      </div>
+    </div>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+      crossorigin="anonymous"
+    ></script>
+    <script>
+      const subwayForm = document.querySelector("#subwayForm");
+      const resultsDiv = document.querySelector("#results");
+      const resultsContent = document.querySelector("#results-content");
+
+      subwayForm.addEventListener("submit", fetchSubway);
+
+      async function fetchSubway(event) {
+        event.preventDefault();
+        resultsDiv.style.display = "none";
+        resultsContent.innerHTML = "";
+
+        const appKey = "4f7a4f424e776c643434634e764b70";
+        const formData = new FormData(event.currentTarget);
+        const date = formData.get("date");
+        const routeName = formData.get("routeName");
+        const stationName = formData.get("stationName");
+
+        if (!date || !routeName || !stationName) {
+          alert("Please fill out all fields.");
+          return;
+        }
+
+        const url = `http://openapi.seoul.go.kr:8088/${appKey}/json/CardSubwayStatsNew/1/5/${date}/${routeName}/${stationName}`;
+
+        try {
+          const response = await fetch(url);
+          const data = await response.json();
+
+          if (data.CardSubwayStatsNew && data.CardSubwayStatsNew.row) {
+            const stats = data.CardSubwayStatsNew.row[0];
+            const rideCount = stats.GTON_TNOPE;
+            const alightCount = stats.GTOFF_TNOPE;
+
+            resultsContent.innerHTML = `
+              <ul class="list-group">
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                  <strong>Date:</strong>
+                  <span>${stats.date}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                  <strong>Line:</strong>
+                  <span>${stats.LINE_NUM}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                  <strong>Station:</strong>
+                  <span>${stats.SUB_STA_NM}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                  <strong>Passengers Getting On:</strong>
+                  <span class="badge bg-success rounded-pill">${Number(
+                    rideCount
+                  ).toLocaleString()}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                  <strong>Passengers Getting Off:</strong>
+                  <span class="badge bg-danger rounded-pill">${Number(
+                    alightCount
+                  ).toLocaleString()}</span>
+                </li>
+              </ul>
+            `;
+            resultsDiv.style.display = "block";
+          } else {
+            resultsContent.innerHTML = `<div class="alert alert-warning" role="alert">No data found for the selected criteria. Please check the station name and date.</div>`;
+            resultsDiv.style.display = "block";
+          }
+        } catch (error) {
+          console.error("Error fetching subway data:", error);
+          resultsContent.innerHTML = `<div class="alert alert-danger" role="alert">An error occurred while fetching the data. Please try again later.</div>`;
+          resultsDiv.style.display = "block";
+        }
+      }
+    </script>
+  </body>
+</html>
