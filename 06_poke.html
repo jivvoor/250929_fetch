@@ -4,12 +4,29 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>포켓몬 도감</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@latest/dist/galmuri.css" />
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      @import url('https://cdn.jsdelivr.net/npm/galmuri@latest/dist/galmuri.css');
-      body {
-        font-family: 'Galmuri', sans-serif;
-      }
+        @import url('https://cdn.jsdelivr.net/npm/galmuri@latest/dist/galmuri.css');
+
+        @font-face {
+            font-family: 'Galmuri11';
+            src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2506-1@1.0/Galmuri11-Bold.woff2') format('woff2');
+            font-weight: 700;
+            font-display: swap;
+        }
+        body {
+            font-family: "Galmuri11", serif;
+        }
+        .bg-white {
+            background-color: rgb(225 198 62);
+        }
+        #searchBtn {
+            background-color: rgb(247, 217, 67);
+        }
+        #searchBtn:hover {
+            background-color: rgb(227, 197, 47);
+        }
     </style>
   </head>
   <body class="bg-gray-100">
@@ -28,7 +45,7 @@
         />
         <button
           id="searchBtn"
-          class="ml-2 bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+          class="ml-2 text-white font-bold py-2 px-4 rounded"
         >
           검색
         </button>
@@ -36,7 +53,7 @@
           id="backBtn"
           class="ml-2 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded hidden"
         >
-          리스트로 돌아가기
+          돌아가기
         </button>
       </section>
 
@@ -62,8 +79,14 @@
       ></section>
     </div>
 
+    <div class="container mx-auto mt-10 p-4 max-w-6xl bg-white rounded-lg shadow-lg">
+        <h2 class="text-2xl font-bold text-center mb-4">나의 포켓몬</h2>
+        <section id="myPokeBox" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4"></section>
+    </div>
+
     <script>
       const pokeBox = document.getElementById("pokeBox");
+      const myPokeBox = document.getElementById("myPokeBox");
       const loading = document.getElementById("loading");
       const paginationNav = document.getElementById("paginationNav");
       const nextBtn = document.getElementById("nextBtn");
@@ -76,6 +99,7 @@
       let nextUrl = null;
       let prevUrl = null;
       let currentPageUrl = initialUrl;
+      let myPokemonList = [];
 
       // --- Main List View Functions ---
       async function fetchAndRenderPokemon(url) {
@@ -93,9 +117,10 @@
           const pokemonPromises = data.results.map(async (pokemon) => {
             const detailResponse = await fetch(pokemon.url);
             const detailData = await detailResponse.json();
+            const koNameObj = (await (await fetch(`https://pokeapi.co/api/v2/pokemon-species/${detailData.id}`)).json()).names.find(v => v.language.name === 'ko');
             return {
               id: detailData.id,
-              name: detailData.name,
+              name: koNameObj ? koNameObj.name : detailData.name,
               shape: detailData.sprites.front_default,
             };
           });
@@ -116,14 +141,38 @@
         pokeBox.innerHTML = pokemonList
           .map(
             (p) => `
-            <div class="p-4 border rounded-lg bg-gray-50 text-center shadow hover:shadow-md transition-shadow cursor-pointer" onclick="searchAndShowPokemon(${p.id})">
-                <img src="${p.shape}" alt="${p.name}" class="mx-auto h-24 w-24">
-                <h5 class="text-sm text-gray-500 mt-2">#${p.id}</h5>
-                <h4 class="text-md font-semibold capitalize">${p.name}</h4>
+            <div class="p-4 border rounded-lg bg-gray-50 text-center shadow hover:shadow-md transition-shadow">
+                <div class="cursor-pointer" onclick='searchAndShowPokemon(${p.id})'>
+                    <img src="${p.shape}" alt="${p.name}" class="mx-auto h-24 w-24">
+                    <h5 class="text-sm text-gray-500 mt-2">#${p.id}</h5>
+                    <h4 class="text-md font-semibold capitalize">${p.name}</h4>
+                </div>
+                <button onclick='addPokemon(${JSON.stringify(p)})' class="mt-2">
+                    <img src="R.png" alt="Add to my pokemon" class="mx-auto h-8 w-8">
+                </button>
             </div>
         `
           )
           .join("");
+      }
+
+      function addPokemon(pokemon) {
+        if (myPokemonList.find(p => p.id === pokemon.id)) {
+            alert("이미 추가된 포켓몬입니다.");
+            return;
+        }
+        myPokemonList.push(pokemon);
+        renderMyPokemon();
+      }
+
+      function renderMyPokemon() {
+        myPokeBox.innerHTML = myPokemonList.map(p => `
+            <div class="p-4 border rounded-lg bg-gray-50 text-center shadow">
+                <img src="${p.shape}" alt="${p.name}" class="mx-auto h-24 w-24">
+                <h5 class="text-sm text-gray-500 mt-2">#${p.id}</h5>
+                <h4 class="text-md font-semibold capitalize">${p.name}</h4>
+            </div>
+        `).join("");
       }
 
       // --- Single Pokemon (Search) View Functions ---
