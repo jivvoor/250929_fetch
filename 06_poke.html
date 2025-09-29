@@ -3,70 +3,201 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Poke</title>
-  </head>
-  <body>
-    <section>
-      포켓몬 ID : <input id="pokeId" type="number" min="1" />
-      <button id="pokeBtn">검색</button>
-    </section>
-    <section id="pokeBox"></section>
-    <script>
-      // 1. API에서 데이터 호출하기
-      async function getPokemon(id) {
-        console.log(`${id}번 포켓몬을 불러옵니다`);
-        const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
-        const data = await response.json();
-        console.log(data);
-        // 이름 (영어)
-        console.log(data.name);
-        // 앞모습
-        console.log(data.sprites.front_default);
-        // 울음소리
-        console.log(data.cries.latest);
-
-        const response2 = await fetch(
-          `https://pokeapi.co/api/v2/pokemon-species/${id}`
-        );
-        const data2 = await response2.json();
-        // 한글 이름
-        console.log(data2);
-        console.log(data2.names); // 스페이스도 없고 특수문자도 없어서...
-        console.log(data2.names.filter((v) => v.language.name === "ko"));
-        console.log(
-          data2.names.filter((v) => v.language.name === "ko")[0].name
-        );
-        const koName = data2.names.filter((v) => v.language.name === "ko")[0]
-          .name;
-        // 변수를 바로 넣으면 해당 변수 이름이 key로 인식되어서 바로 들어가게 됨
-        renderPoke({
-          engName: data.name,
-          koName,
-          shape: data.sprites.front_default,
-          sound: data.cries.latest,
-        });
+    <title>포켓몬 도감</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url('https://cdn.jsdelivr.net/npm/galmuri@latest/dist/galmuri.css');
+      body {
+        font-family: 'Galmuri', sans-serif;
       }
-      //   getPokemon(1);
-      // 2. input 통해 번호 바꿔보기
-      const pokeBtn = document.querySelector("#pokeBtn");
-      const pokeId = document.querySelector("#pokeId");
-      pokeBtn.addEventListener("click", () => getPokemon(pokeId.value));
-      // 3. 데이터 화면에 그리기
-      function renderPoke({ engName, koName, shape, sound }) {
-        const pokeBox = document.querySelector("#pokeBox");
+    </style>
+  </head>
+  <body class="bg-gray-100">
+    <div
+      class="container mx-auto mt-10 p-4 max-w-6xl bg-white rounded-lg shadow-lg"
+    >
+      <h1 class="text-3xl font-bold text-center mb-6">포켓몬 도감</h1>
+
+      <section class="flex items-center justify-center mb-4">
+        <label for="pokeId" class="mr-2 font-bold">포켓몬 ID :</label>
+        <input
+          id="pokeId"
+          type="number"
+          min="1"
+          class="border-2 border-gray-300 p-2 rounded-md w-24 text-center"
+        />
+        <button
+          id="searchBtn"
+          class="ml-2 bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+        >
+          검색
+        </button>
+        <button
+          id="backBtn"
+          class="ml-2 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded hidden"
+        >
+          리스트로 돌아가기
+        </button>
+      </section>
+
+      <nav id="paginationNav" class="flex justify-center items-center space-x-4 mb-6">
+        <button
+          id="prevBtn"
+          class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:bg-gray-400"
+        >
+          이전
+        </button>
+        <button
+          id="nextBtn"
+          class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:bg-gray-400"
+        >
+          다음
+        </button>
+      </nav>
+
+      <div id="loading" class="text-center text-xl font-semibold">로딩 중...</div>
+
+      <section id="pokeBox"
+        class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4"
+      ></section>
+    </div>
+
+    <script>
+      const pokeBox = document.getElementById("pokeBox");
+      const loading = document.getElementById("loading");
+      const paginationNav = document.getElementById("paginationNav");
+      const nextBtn = document.getElementById("nextBtn");
+      const prevBtn = document.getElementById("prevBtn");
+      const searchBtn = document.getElementById("searchBtn");
+      const pokeIdInput = document.getElementById("pokeId");
+      const backBtn = document.getElementById("backBtn");
+
+      const initialUrl = "https://pokeapi.co/api/v2/pokemon?limit=21";
+      let nextUrl = null;
+      let prevUrl = null;
+      let currentPageUrl = initialUrl;
+
+      // --- Main List View Functions ---
+      async function fetchAndRenderPokemon(url) {
+        currentPageUrl = url;
+        showLoading(true);
+        showPagination(true);
+
+        try {
+          const response = await fetch(url);
+          const data = await response.json();
+
+          nextUrl = data.next;
+          prevUrl = data.previous;
+
+          const pokemonPromises = data.results.map(async (pokemon) => {
+            const detailResponse = await fetch(pokemon.url);
+            const detailData = await detailResponse.json();
+            return {
+              id: detailData.id,
+              name: detailData.name,
+              shape: detailData.sprites.front_default,
+            };
+          });
+
+          const pokemonList = await Promise.all(pokemonPromises);
+          renderPokemonList(pokemonList);
+        } catch (error) {
+          handleError("리스트를 불러오는 데 실패했습니다.");
+        } finally {
+          showLoading(false);
+          nextBtn.disabled = !nextUrl;
+          prevBtn.disabled = !prevUrl;
+        }
+      }
+
+      function renderPokemonList(pokemonList) {
+        pokeBox.className = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4";
+        pokeBox.innerHTML = pokemonList
+          .map(
+            (p) => `
+            <div class="p-4 border rounded-lg bg-gray-50 text-center shadow hover:shadow-md transition-shadow cursor-pointer" onclick="searchAndShowPokemon(${p.id})">
+                <img src="${p.shape}" alt="${p.name}" class="mx-auto h-24 w-24">
+                <h5 class="text-sm text-gray-500 mt-2">#${p.id}</h5>
+                <h4 class="text-md font-semibold capitalize">${p.name}</h4>
+            </div>
+        `
+          )
+          .join("");
+      }
+
+      // --- Single Pokemon (Search) View Functions ---
+      async function searchAndShowPokemon(id) {
+        if (!id) {
+          alert("포켓몬 ID를 입력해주세요.");
+          return;
+        }
+        showLoading(true);
+        showPagination(false);
+
+        try {
+          const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
+          const data = await response.json();
+
+          const response2 = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}`);
+          const data2 = await response2.json();
+
+          const koNameObj = data2.names.find((v) => v.language.name === "ko");
+          const koName = koNameObj ? koNameObj.name : data.name;
+
+          const pokeData = {
+            id: data.id,
+            engName: data.name,
+            koName,
+            shape: data.sprites.front_default,
+            sound: data.cries.latest,
+          };
+
+          renderSinglePokemon(pokeData);
+        } catch (error) {
+            handleError(`ID ${id}에 해당하는 포켓몬을 찾을 수 없습니다.`);
+        } finally {
+            showLoading(false);
+        }
+      }
+
+      function renderSinglePokemon(pokemon) {
+        pokeBox.className = "flex justify-center";
         pokeBox.innerHTML = `
-            <h4>${koName}</h4>
-            <h5>${engName}</h5>
-            <img src="${shape}">
-            <audio src="${sound}" controls></audio>
+            <div class="p-6 border rounded-lg bg-gray-50 text-center shadow-xl w-full max-w-sm">
+                <h5 class="text-lg text-gray-500">#${pokemon.id}</h5>
+                <h4 class="text-3xl font-bold">${pokemon.koName}</h4>
+                <h5 class="text-xl text-gray-500 mb-4 capitalize">${pokemon.engName}</h5>
+                <img src="${pokemon.shape}" alt="${pokemon.koName}" class="mx-auto h-48 w-48">
+                <audio src="${pokemon.sound}" controls class="mt-4 mx-auto w-full"></audio>
+            </div>
         `;
       }
-      document.addEventListener("DOMContentLoaded", () => {
-        const rawReventPoke = localStorage.getItem("recent");
-        if (!rawReventPoke) return;
-        const recentPoke = JSON.parse(rawReventPoke);
-        renderPoke(recentPoke);
-      });
+
+      // --- UI Control & Event Handlers ---
+      function showLoading(isLoading) {
+        loading.style.display = isLoading ? "block" : "none";
+        if (isLoading) pokeBox.innerHTML = "";
+      }
+
+      function showPagination(isShown) {
+          paginationNav.style.display = isShown ? "flex" : "none";
+          backBtn.style.display = isShown ? "none" : "block";
+      }
+      
+      function handleError(message) {
+          console.error(message);
+          pokeBox.innerHTML = `<p class="text-red-500 text-center col-span-full">${message}</p>`;
+      }
+
+      nextBtn.addEventListener("click", () => nextUrl && fetchAndRenderPokemon(nextUrl));
+      prevBtn.addEventListener("click", () => prevUrl && fetchAndRenderPokemon(prevUrl));
+      searchBtn.addEventListener("click", () => searchAndShowPokemon(pokeIdInput.value));
+      pokeIdInput.addEventListener("keypress", (e) => e.key === 'Enter' && searchAndShowPokemon(pokeIdInput.value));
+      backBtn.addEventListener("click", () => fetchAndRenderPokemon(currentPageUrl));
+
+      // --- Initial Load ---
+      document.addEventListener("DOMContentLoaded", () => fetchAndRenderPokemon(initialUrl));
     </script>
   </body>
 </html>
